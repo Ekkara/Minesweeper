@@ -63,11 +63,19 @@ public class MapGenerator : MonoBehaviour
             }
         }
         mapMade = true;
+        currentHint = null;
     }
     void LeftClick(int wPos, int hPos) {
         if (mineField[wPos, hPos].state.Equals(0) && !mineField[wPos, hPos].isPressed) {
             if (mineField[wPos, hPos].containMine) {
                 mineField[wPos, hPos].tileGO.GetComponent<SpriteRenderer>().color = Color.red;
+                for (int w = 0; w < width; w++) {
+                    for (int h = 0; h < height; h++) {
+                        if (!mineField[w, h].containMine && mineField[w, h].state > 0) {
+                            mineField[w, h].flagGO.GetComponent<SpriteRenderer>().color = Color.red;
+                        }
+                    }
+                }
                 lost = true;
             }
             else {
@@ -134,7 +142,7 @@ public class MapGenerator : MonoBehaviour
             remainingPos.RemoveAt(0);
             currentFound++;
         }
-        if (currentFound >= minSafeFound) {
+        if (currentFound >= minSafeFound) {           
             Debug.Log("Win");
         }
     }
@@ -343,7 +351,7 @@ public class MapGenerator : MonoBehaviour
         }
     }
 
-    
+
     Arr currentHint;
     void GenerateClue() {
         List<Arr> possibleHints = new List<Arr>();//list of possible squares
@@ -433,12 +441,12 @@ public class MapGenerator : MonoBehaviour
                         flagedTiles++;
                     }
                 }
-                 if ((amountOBombs - flagedTiles).Equals(unkownTiles)) {
-                     foreach (Arr ar in potentialBombs) {
-                         hidenFlags.Add(ar);
-                         mineField[ar.w, ar.h].state = 3;
-                     }
-                 }
+                if ((amountOBombs - flagedTiles).Equals(unkownTiles)) {
+                    foreach (Arr ar in potentialBombs) {
+                        hidenFlags.Add(ar);
+                        mineField[ar.w, ar.h].state = 3;
+                    }
+                }
             }
         }
 
@@ -453,7 +461,7 @@ public class MapGenerator : MonoBehaviour
                 List<Arr> potentialBombs = new List<Arr>();
                 if (w >= 1) {
                     if (!mineField[w - 1, h].isPressed && mineField[w - 1, h].state == 0) {
-                         potentialBombs.Add(new Arr(w - 1, h));
+                        potentialBombs.Add(new Arr(w - 1, h));
                     }
                     if (mineField[w - 1, h].state > 0) {
                         flagedTiles++;
@@ -517,7 +525,7 @@ public class MapGenerator : MonoBehaviour
                 }
                 if (flagedTiles.Equals(amountOBombs)) {
                     foreach (Arr ar in potentialBombs) {
-                        if (!Arr.Contain(possibleHints, ar) && !mineField[ar.w, ar.h].isPressed){
+                        if (!Arr.Contain(possibleHints, ar) && !mineField[ar.w, ar.h].isPressed) {
                             possibleHints.Add(ar);
                         }
                     }
@@ -525,7 +533,7 @@ public class MapGenerator : MonoBehaviour
             }
         }
         #endregion
-        foreach(Arr ar in hidenFlags) {
+        foreach (Arr ar in hidenFlags) {
             mineField[ar.w, ar.h].state = 0;
         }
         //if list is not empty pick a random number and return
@@ -537,8 +545,13 @@ public class MapGenerator : MonoBehaviour
         }
     }
     void PickRandomClue(List<Arr> possibleHints) {
-       
         int randomIndex = Random.RandomRange(0, possibleHints.Count - 1);
+        if (currentHint != null) {
+            if (!mineField[currentHint.w, currentHint.h].isPressed) {
+                mineField[currentHint.w, currentHint.h].tileGO.GetComponent<SpriteRenderer>().color =
+                    (((currentHint.w + currentHint.h) % 2) == 0) ? color1 : color2;
+            }
+        }
         currentHint = new Arr(possibleHints[randomIndex].w, possibleHints[randomIndex].h);
         possibleHints.RemoveAt(randomIndex);
         mineField[currentHint.w, currentHint.h].tileGO.GetComponent<SpriteRenderer>().color = (((currentHint.w + currentHint.h) % 2) == 0) ? hintColor1 : hintColor2;

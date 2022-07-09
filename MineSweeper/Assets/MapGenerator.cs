@@ -1,29 +1,35 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
 
 public class MapGenerator : MonoBehaviour
 {
     [SerializeField] [Range(9, 100)] int width = 18, height = 14;
-    [SerializeField] int mines = 10;
+    int flagesPlaced = 0;
+    [SerializeField] int amountOfMines = 10;
     [SerializeField] GameObject tile;
     [SerializeField] Color color1, color2, BGColor1, BGColor2, hintColor1, hintColor2, flagColor1, flagColor2;
     [SerializeField] GameObject flag;
     [SerializeField] GameObject numberOfColidingMines;
+    [SerializeField] GameObject mineGO;
     [SerializeField] Color mine1, mine2, mine3, mine4, mine5, mine6, mine7, mine8;
     [SerializeField] Tile[,] mineField;
-    [HideInInspector] [SerializeField] bool mapMade = false;
-    bool lost;
+    [SerializeField] bool mapMade = false;
+    bool gameOver;
 
+    [SerializeField] Text gameText;
+    string baseGameText;
     private void Start() {
-        lost = false;
+        baseGameText = gameText.text;
         GenerateTiles();
     }
 
     private void OnValidate() {
-        if (mines >= ((width * height) - 9)) {
+        if (amountOfMines >= ((width * height) - 9)) {
             int newAmount = ((width * height)) - 9;
             Debug.LogWarning("mines can't cover the entire field, value changed to entire field minus nine, the new value is: " + newAmount);
-            mines = newAmount;
+            amountOfMines = newAmount;
         }
         if (numberOfColidingMines.GetComponent<TextMesh>() == null) {
             Debug.LogWarning("objectDidn't contain text");
@@ -43,7 +49,7 @@ public class MapGenerator : MonoBehaviour
     }
     public void GenerateTiles() {
         firstPress = true;
-        minSafeFound = (width * height) - mines;
+        minSafeFound = (width * height) - amountOfMines;
         currentFound = 0;
         if (mapMade) {
             //destroy tiles
@@ -63,20 +69,17 @@ public class MapGenerator : MonoBehaviour
             }
         }
         mapMade = true;
-        currentHint = null;
+        haveHint = false;
+        flagesPlaced = 0;
+        gameOver = false;
+        currentTime = 0;
     }
     void LeftClick(int wPos, int hPos) {
         if (mineField[wPos, hPos].state.Equals(0) && !mineField[wPos, hPos].isPressed) {
             if (mineField[wPos, hPos].containMine) {
                 mineField[wPos, hPos].tileGO.GetComponent<SpriteRenderer>().color = Color.red;
-                for (int w = 0; w < width; w++) {
-                    for (int h = 0; h < height; h++) {
-                        if (!mineField[w, h].containMine && mineField[w, h].state > 0) {
-                            mineField[w, h].flagGO.GetComponent<SpriteRenderer>().color = Color.red;
-                        }
-                    }
-                }
-                lost = true;
+                DisplayAllMines();
+                gameOver = true;
             }
             else {
                 UpdateVision(wPos, hPos);
@@ -84,66 +87,73 @@ public class MapGenerator : MonoBehaviour
         }
     }
     void UpdateVision(int wp, int hp) {
-        List<Arr> remainingPos = new List<Arr>();
-        remainingPos.Add(new Arr(wp, hp));
+        List<Vector2Int> remainingPos = new List<Vector2Int>();
+        remainingPos.Add(new Vector2Int(wp, hp));
         while (remainingPos.Count > 0) {
-            if (mineField[remainingPos[0].w, remainingPos[0].h].isPressed) {
+            if (mineField[remainingPos[0].x, remainingPos[0].y].isPressed) {
                 remainingPos.RemoveAt(0);
                 continue;
             }
 
 
-            mineField[remainingPos[0].w, remainingPos[0].h].tileGO.GetComponent<SpriteRenderer>().color = (((remainingPos[0].w + remainingPos[0].h) % 2) == 0) ? BGColor1 : BGColor2;
-            mineField[remainingPos[0].w, remainingPos[0].h].isPressed = true;
-            GenerateNumber(remainingPos[0].w, remainingPos[0].h);
+            mineField[remainingPos[0].x, remainingPos[0].y].tileGO.GetComponent<SpriteRenderer>().color = (((remainingPos[0].x + remainingPos[0].y) % 2) == 0) ? BGColor1 : BGColor2;
+            mineField[remainingPos[0].x, remainingPos[0].y].isPressed = true;
+            GenerateNumber(remainingPos[0].x, remainingPos[0].y);
 
-            if (mineField[remainingPos[0].w, remainingPos[0].h].colidingMineAmount <= 0) {
-                if (remainingPos[0].w >= 1) {
-                    if (!mineField[remainingPos[0].w - 1, remainingPos[0].h].isPressed) {
-                        remainingPos.Add(new Arr(remainingPos[0].w - 1, remainingPos[0].h));
+            if (mineField[remainingPos[0].x, remainingPos[0].y].colidingMineAmount <= 0) {
+                if (remainingPos[0].x >= 1) {
+                    if (!mineField[remainingPos[0].x - 1, remainingPos[0].y].isPressed) {
+                        remainingPos.Add(new Vector2Int(remainingPos[0].x - 1, remainingPos[0].y));
                     }
-                    if (remainingPos[0].h >= 1) {
-                        if (!mineField[remainingPos[0].w - 1, remainingPos[0].h - 1].isPressed) {
-                            remainingPos.Add(new Arr(remainingPos[0].w - 1, remainingPos[0].h - 1));
+                    if (remainingPos[0].y >= 1) {
+                        if (!mineField[remainingPos[0].x - 1, remainingPos[0].y - 1].isPressed) {
+                            remainingPos.Add(new Vector2Int(remainingPos[0].x - 1, remainingPos[0].y - 1));
                         }
                     }
-                    if (remainingPos[0].h < height - 1) {
-                        if (!mineField[remainingPos[0].w - 1, remainingPos[0].h + 1].isPressed) {
-                            remainingPos.Add(new Arr(remainingPos[0].w - 1, remainingPos[0].h + 1));
-                        }
-                    }
-                }
-                if (remainingPos[0].w < width - 1) {
-                    if (!mineField[remainingPos[0].w + 1, remainingPos[0].h].isPressed) {
-                        remainingPos.Add(new Arr(remainingPos[0].w + 1, remainingPos[0].h));
-                    }
-                    if (remainingPos[0].h >= 1) {
-                        if (!mineField[remainingPos[0].w + 1, remainingPos[0].h - 1].isPressed) {
-                            remainingPos.Add(new Arr(remainingPos[0].w + 1, remainingPos[0].h - 1));
-                        }
-                    }
-                    if (remainingPos[0].h < height - 1) {
-                        if (!mineField[remainingPos[0].w + 1, remainingPos[0].h + 1].isPressed) {
-                            remainingPos.Add(new Arr(remainingPos[0].w + 1, remainingPos[0].h + 1));
+                    if (remainingPos[0].y < height - 1) {
+                        if (!mineField[remainingPos[0].x - 1, remainingPos[0].y + 1].isPressed) {
+                            remainingPos.Add(new Vector2Int(remainingPos[0].x - 1, remainingPos[0].y + 1));
                         }
                     }
                 }
-                if (remainingPos[0].h >= 1) {
-                    if (!mineField[remainingPos[0].w, remainingPos[0].h - 1].isPressed) {
-                        remainingPos.Add(new Arr(remainingPos[0].w, remainingPos[0].h - 1));
+                if (remainingPos[0].x < width - 1) {
+                    if (!mineField[remainingPos[0].x + 1, remainingPos[0].y].isPressed) {
+                        remainingPos.Add(new Vector2Int(remainingPos[0].x + 1, remainingPos[0].y));
+                    }
+                    if (remainingPos[0].y >= 1) {
+                        if (!mineField[remainingPos[0].x + 1, remainingPos[0].y - 1].isPressed) {
+                            remainingPos.Add(new Vector2Int(remainingPos[0].x + 1, remainingPos[0].y - 1));
+                        }
+                    }
+                    if (remainingPos[0].y < height - 1) {
+                        if (!mineField[remainingPos[0].x + 1, remainingPos[0].y + 1].isPressed) {
+                            remainingPos.Add(new Vector2Int(remainingPos[0].x + 1, remainingPos[0].y + 1));
+                        }
                     }
                 }
-                if (remainingPos[0].h < height - 1) {
-                    if (!mineField[remainingPos[0].w, remainingPos[0].h + 1].isPressed) {
-                        remainingPos.Add(new Arr(remainingPos[0].w, remainingPos[0].h + 1));
+                if (remainingPos[0].y >= 1) {
+                    if (!mineField[remainingPos[0].x, remainingPos[0].y - 1].isPressed) {
+                        remainingPos.Add(new Vector2Int(remainingPos[0].x, remainingPos[0].y - 1));
+                    }
+                }
+                if (remainingPos[0].y < height - 1) {
+                    if (!mineField[remainingPos[0].x, remainingPos[0].y + 1].isPressed) {
+                        remainingPos.Add(new Vector2Int(remainingPos[0].x, remainingPos[0].y + 1));
                     }
                 }
             }
             remainingPos.RemoveAt(0);
             currentFound++;
         }
-        if (currentFound >= minSafeFound) {           
-            Debug.Log("Win");
+        if (currentFound >= minSafeFound) {
+            LookForWinState();
+        }
+    }
+    void LookForWinState() {
+        if (currentFound >= minSafeFound && 
+            flagesPlaced >= amountOfMines) {
+            DisplayAllMines();
+            gameOver = true;
         }
     }
     void GenerateNumber(int w, int h) {
@@ -190,6 +200,7 @@ public class MapGenerator : MonoBehaviour
         mineField[wPos, hPos].state++;
         if (mineField[wPos, hPos].state >= 3) {
             mineField[wPos, hPos].state = 0;
+            flagesPlaced--;
         }
         if (mineField[wPos, hPos].state.Equals(0)) {
             Destroy(mineField[wPos, hPos].flagGO);
@@ -201,6 +212,9 @@ public class MapGenerator : MonoBehaviour
 
             newFlag.gameObject.GetComponent<SpriteRenderer>().color = flagColor1;
             mineField[wPos, hPos].flagGO = newFlag;
+
+            flagesPlaced++;
+            LookForWinState();
         }
         else if (mineField[wPos, hPos].state.Equals(2)) {
             Destroy(mineField[wPos, hPos].flagGO);
@@ -214,7 +228,7 @@ public class MapGenerator : MonoBehaviour
 
 
     void PlaceMines(int wPos, int hPos) {
-        List<Arr> listOfArr = new List<Arr>();
+        List<Vector2Int> listOfArr = new List<Vector2Int>();
         //generete all possible spawning positions for the mines
         //remove first mine to avoid sudden death at start as well as all adjecent tiles, to avoid starting on a number
         for (int w = 0; w < width; w++) {
@@ -247,20 +261,20 @@ public class MapGenerator : MonoBehaviour
                     continue;
                 }
 
-                listOfArr.Add(new Arr(w, h));
+                listOfArr.Add(new Vector2Int(w, h));
             }
         }
         //shuffle tiles to place mines at random
         for (int i = 0; i < listOfArr.Count; i++) {
             int randomIndex = Random.Range(i, listOfArr.Count);
 
-            Arr holderOfArr = listOfArr[i];
+            Vector2Int holderOfArr = listOfArr[i];
             listOfArr[i] = listOfArr[randomIndex];
             listOfArr[randomIndex] = holderOfArr;
         }
         //place mines
-        for (int i = 0; i < mines; i++) {
-            mineField[listOfArr[i].w, listOfArr[i].h].containMine = true;
+        for (int i = 0; i < amountOfMines; i++) {
+            mineField[listOfArr[i].x, listOfArr[i].y].containMine = true;
         }
         //count each tile's mine colliding amount
         for (int w = 0; w < width; w++) {
@@ -310,22 +324,36 @@ public class MapGenerator : MonoBehaviour
             }
         }
     }
+
+    void DisplayAllMines() {
+        for(int w = 0; w < width; w++) {
+            for(int h = 0; h < height; h++) {
+                if (mineField[w, h].containMine) {
+                    GameObject newMine = Instantiate(mineGO, 
+                        mineField[w, h].tileGO.transform.position, 
+                        mineField[w, h].tileGO.transform.rotation, 
+                        mineField[w, h].tileGO.transform);
+                }
+            }
+        }
+    }
+
     bool firstPress = true;
     int minSafeFound, currentFound;
 
-
+    float currentTime;
     private void Update() {
-        if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.R)) {
-            if (lost) {
-                GenerateTiles();
-                lost = false;
-            }
-        }
-        if (lost)
+        if (isPaused || gameOver)
             return;
-        if (Input.GetKeyDown(KeyCode.H)) {
-            GenerateClue();
-        }
+
+        string tempString = baseGameText;
+        currentTime += Time.deltaTime;
+        tempString = tempString.Replace("[$t]", (currentTime / 60).ToString("00") + ":" + (currentTime % 60).ToString("00"));
+
+        tempString = tempString.Replace("[$fP]", flagesPlaced.ToString());
+        tempString = tempString.Replace("[$tM]", amountOfMines.ToString());
+        gameText.text = tempString;
+        
         if (Input.GetMouseButtonDown(0)) {
             LayerMask mask = LayerMask.GetMask("Tile");
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -351,11 +379,11 @@ public class MapGenerator : MonoBehaviour
         }
     }
 
-
-    Arr currentHint;
-    void GenerateClue() {
-        List<Arr> possibleHints = new List<Arr>();//list of possible squares
-        List<Arr> hidenFlags = new List<Arr>();//list of safe tiles that the player might not know of
+    
+    Vector2Int currentHint;
+    public void GenerateClue() {
+        List<Vector2Int> possibleHints = new List<Vector2Int>();//list of possible squares
+        List<Vector2Int> hidenFlags = new List<Vector2Int>();//list of safe tiles that the player might not know of
 
         //if it is not empty calculate all possible tiles
         #region easy check
@@ -368,11 +396,11 @@ public class MapGenerator : MonoBehaviour
                 int flagedTiles = 0;
                 int unkownTiles = 0;
                 int amountOBombs = mineField[w, h].colidingMineAmount;
-                List<Arr> potentialBombs = new List<Arr>();
+                List<Vector2Int> potentialBombs = new List<Vector2Int>();
                 if (w >= 1) {
                     if (!mineField[w - 1, h].isPressed && mineField[w - 1, h].state == 0) {
                         unkownTiles++;
-                        potentialBombs.Add(new Arr(w - 1, h));
+                        potentialBombs.Add(new Vector2Int(w - 1, h));
                     }
                     if (mineField[w - 1, h].state > 0) {
                         flagedTiles++;
@@ -380,7 +408,7 @@ public class MapGenerator : MonoBehaviour
                     if (h >= 1) {
                         if (!mineField[w - 1, h - 1].isPressed && mineField[w - 1, h - 1].state == 0) {
                             unkownTiles++;
-                            potentialBombs.Add(new Arr(w - 1, h - 1));
+                            potentialBombs.Add(new Vector2Int(w - 1, h - 1));
                         }
                         if (mineField[w - 1, h - 1].state > 0) {
                             flagedTiles++;
@@ -388,7 +416,7 @@ public class MapGenerator : MonoBehaviour
                     }
                     if (h < height - 1) {
                         if (!mineField[w - 1, h + 1].isPressed && mineField[w - 1, h + 1].state == 0) {
-                            potentialBombs.Add(new Arr(w - 1, h + 1));
+                            potentialBombs.Add(new Vector2Int(w - 1, h + 1));
                             unkownTiles++;
                         }
                         if (mineField[w - 1, h + 1].state > 0) {
@@ -398,7 +426,7 @@ public class MapGenerator : MonoBehaviour
                 }
                 if (w < width - 1) {
                     if (!mineField[w + 1, h].isPressed && mineField[w + 1, h].state == 0) {
-                        potentialBombs.Add(new Arr(w + 1, h));
+                        potentialBombs.Add(new Vector2Int(w + 1, h));
                         unkownTiles++;
                     }
                     if (mineField[w + 1, h].state > 0) {
@@ -406,7 +434,7 @@ public class MapGenerator : MonoBehaviour
                     }
                     if (h >= 1) {
                         if (!mineField[w + 1, h - 1].isPressed && mineField[w + 1, h - 1].state == 0) {
-                            potentialBombs.Add(new Arr(w + 1, h - 1));
+                            potentialBombs.Add(new Vector2Int(w + 1, h - 1));
                             unkownTiles++;
                         }
                         if (mineField[w + 1, h - 1].state > 0) {
@@ -415,7 +443,7 @@ public class MapGenerator : MonoBehaviour
                     }
                     if (h < height - 1) {
                         if (!mineField[w + 1, h + 1].isPressed && mineField[w + 1, h + 1].state == 0) {
-                            potentialBombs.Add(new Arr(w + 1, h + 1));
+                            potentialBombs.Add(new Vector2Int(w + 1, h + 1));
                             unkownTiles++;
                         }
                         if (mineField[w + 1, h + 1].state > 0) {
@@ -425,7 +453,7 @@ public class MapGenerator : MonoBehaviour
                 }
                 if (h >= 1) {
                     if (!mineField[w, h - 1].isPressed && mineField[w, h - 1].state == 0) {
-                        potentialBombs.Add(new Arr(w, h - 1));
+                        potentialBombs.Add(new Vector2Int(w, h - 1));
                         unkownTiles++;
                     }
                     if (mineField[w, h - 1].state > 0) {
@@ -434,7 +462,7 @@ public class MapGenerator : MonoBehaviour
                 }
                 if (h < height - 1) {
                     if (!mineField[w, h + 1].isPressed && mineField[w, h + 1].state == 0) {
-                        potentialBombs.Add(new Arr(w, h + 1));
+                        potentialBombs.Add(new Vector2Int(w, h + 1));
                         unkownTiles++;
                     }
                     if (mineField[w, h + 1].state > 0) {
@@ -442,9 +470,9 @@ public class MapGenerator : MonoBehaviour
                     }
                 }
                 if ((amountOBombs - flagedTiles).Equals(unkownTiles)) {
-                    foreach (Arr ar in potentialBombs) {
+                    foreach (Vector2Int ar in potentialBombs) {
                         hidenFlags.Add(ar);
-                        mineField[ar.w, ar.h].state = 3;
+                        mineField[ar.x, ar.y].state = 3;
                     }
                 }
             }
@@ -458,17 +486,17 @@ public class MapGenerator : MonoBehaviour
 
                 int flagedTiles = 0;
                 int amountOBombs = mineField[w, h].colidingMineAmount;
-                List<Arr> potentialBombs = new List<Arr>();
+                List<Vector2Int> potentialBombs = new List<Vector2Int>();
                 if (w >= 1) {
                     if (!mineField[w - 1, h].isPressed && mineField[w - 1, h].state == 0) {
-                        potentialBombs.Add(new Arr(w - 1, h));
+                        potentialBombs.Add(new Vector2Int(w - 1, h));
                     }
                     if (mineField[w - 1, h].state > 0) {
                         flagedTiles++;
                     }
                     if (h >= 1) {
                         if (!mineField[w - 1, h - 1].isPressed && mineField[w - 1, h - 1].state == 0) {
-                            potentialBombs.Add(new Arr(w - 1, h - 1));
+                            potentialBombs.Add(new Vector2Int(w - 1, h - 1));
                         }
                         if (mineField[w - 1, h - 1].state > 0) {
                             flagedTiles++;
@@ -476,7 +504,7 @@ public class MapGenerator : MonoBehaviour
                     }
                     if (h < height - 1) {
                         if (!mineField[w - 1, h + 1].isPressed && mineField[w - 1, h + 1].state == 0) {
-                            potentialBombs.Add(new Arr(w - 1, h + 1));
+                            potentialBombs.Add(new Vector2Int(w - 1, h + 1));
                         }
                         if (mineField[w - 1, h + 1].state > 0) {
                             flagedTiles++;
@@ -485,14 +513,14 @@ public class MapGenerator : MonoBehaviour
                 }
                 if (w < width - 1) {
                     if (!mineField[w + 1, h].isPressed && mineField[w + 1, h].state == 0) {
-                        potentialBombs.Add(new Arr(w + 1, h));
+                        potentialBombs.Add(new Vector2Int(w + 1, h));
                     }
                     if (mineField[w + 1, h].state > 0) {
                         flagedTiles++;
                     }
                     if (h >= 1) {
                         if (!mineField[w + 1, h - 1].isPressed && mineField[w + 1, h - 1].state == 0) {
-                            potentialBombs.Add(new Arr(w + 1, h - 1));
+                            potentialBombs.Add(new Vector2Int(w + 1, h - 1));
                         }
                         if (mineField[w + 1, h - 1].state > 0) {
                             flagedTiles++;
@@ -500,7 +528,7 @@ public class MapGenerator : MonoBehaviour
                     }
                     if (h < height - 1) {
                         if (!mineField[w + 1, h + 1].isPressed && mineField[w + 1, h + 1].state == 0) {
-                            potentialBombs.Add(new Arr(w + 1, h + 1));
+                            potentialBombs.Add(new Vector2Int(w + 1, h + 1));
                         }
                         if (mineField[w + 1, h + 1].state > 0) {
                             flagedTiles++;
@@ -509,7 +537,7 @@ public class MapGenerator : MonoBehaviour
                 }
                 if (h >= 1) {
                     if (!mineField[w, h - 1].isPressed && mineField[w, h - 1].state == 0) {
-                        potentialBombs.Add(new Arr(w, h - 1));
+                        potentialBombs.Add(new Vector2Int(w, h - 1));
                     }
                     if (mineField[w, h - 1].state > 0) {
                         flagedTiles++;
@@ -517,15 +545,15 @@ public class MapGenerator : MonoBehaviour
                 }
                 if (h < height - 1) {
                     if (!mineField[w, h + 1].isPressed && mineField[w, h + 1].state == 0) {
-                        potentialBombs.Add(new Arr(w, h + 1));
+                        potentialBombs.Add(new Vector2Int(w, h + 1));
                     }
                     if (mineField[w, h + 1].state > 0) {
                         flagedTiles++;
                     }
                 }
                 if (flagedTiles.Equals(amountOBombs)) {
-                    foreach (Arr ar in potentialBombs) {
-                        if (!Arr.Contain(possibleHints, ar) && !mineField[ar.w, ar.h].isPressed) {
+                    foreach (Vector2Int ar in potentialBombs) {
+                        if (!possibleHints.Contains(ar) && !mineField[ar.x, ar.y].isPressed) {
                             possibleHints.Add(ar);
                         }
                     }
@@ -533,28 +561,102 @@ public class MapGenerator : MonoBehaviour
             }
         }
         #endregion
-        foreach (Arr ar in hidenFlags) {
-            mineField[ar.w, ar.h].state = 0;
+        foreach (Vector2Int ar in hidenFlags) {
+            mineField[ar.x, ar.y].state = 0;
         }
         //if list is not empty pick a random number and return
         if (possibleHints.Count > 0) {
             PickRandomClue(possibleHints);
         }
         else {
-            Debug.Log("no guaranted safe tiles left");
-        }
-    }
-    void PickRandomClue(List<Arr> possibleHints) {
-        int randomIndex = Random.RandomRange(0, possibleHints.Count - 1);
-        if (currentHint != null) {
-            if (!mineField[currentHint.w, currentHint.h].isPressed) {
-                mineField[currentHint.w, currentHint.h].tileGO.GetComponent<SpriteRenderer>().color =
-                    (((currentHint.w + currentHint.h) % 2) == 0) ? color1 : color2;
+            if (isAnimating) {
+                StopAllCoroutines();
+                StartCoroutine(InteruptedFadeInNoClueText());
+            }
+            else {
+                StartCoroutine(FadeInNoClueText());
             }
         }
-        currentHint = new Arr(possibleHints[randomIndex].w, possibleHints[randomIndex].h);
+    }
+    bool haveHint;
+    void PickRandomClue(List<Vector2Int> possibleHints) {
+        int randomIndex = Random.RandomRange(0, possibleHints.Count - 1);
+        if (!haveHint) {
+            if (!mineField[currentHint.x, currentHint.y].isPressed) {
+                mineField[currentHint.x, currentHint.y].tileGO.GetComponent<SpriteRenderer>().color =
+                    (((currentHint.x + currentHint.y) % 2) == 0) ? color1 : color2;
+            }
+        }
+        else {
+            haveHint = true;
+        }
+        currentHint = new Vector2Int(possibleHints[randomIndex].x, possibleHints[randomIndex].y);
         possibleHints.RemoveAt(randomIndex);
-        mineField[currentHint.w, currentHint.h].tileGO.GetComponent<SpriteRenderer>().color = (((currentHint.w + currentHint.h) % 2) == 0) ? hintColor1 : hintColor2;
+        mineField[currentHint.x, currentHint.y].tileGO.GetComponent<SpriteRenderer>().color = (((currentHint.x + currentHint.y) % 2) == 0) ? hintColor1 : hintColor2;
+    }
+
+    bool isPaused = false;
+    [SerializeField] Text pausedText;
+    public void PauseTheGame() {
+        isPaused = !isPaused;
+        pausedText.text = isPaused ? "Unpause" : "Pause";
+    }
+    public void Restart() {
+        GenerateTiles();
+        string tempString = baseGameText;
+        currentTime += Time.deltaTime;
+        tempString = tempString.Replace("[$t]", (currentTime / 60).ToString("00") + ":" + (currentTime % 60).ToString("00"));
+
+        tempString = tempString.Replace("[$fP]", flagesPlaced.ToString());
+        tempString = tempString.Replace("[$tM]", amountOfMines.ToString());
+        gameText.text = tempString;
+    }
+    public void ExitGame() {
+        Application.Quit();
+    }
+
+    [SerializeField] Text hintText;
+    [SerializeField] float fadeInDuration, displayDuration, fadeAwayDuration;
+    bool isAnimating = false;
+
+    IEnumerator FadeInNoClueText() {
+        isAnimating = true;
+        Color color = hintText.color;
+        Color hidenColor = new Color(color.r, color.g, color.b, 0);
+        Color displayColor = new Color(color.r, color.g, color.b, 1);
+
+        float elapsedTime = 0f;
+        while (elapsedTime < fadeInDuration) {
+            elapsedTime += Time.deltaTime;
+            hintText.color = Color.Lerp(hidenColor, displayColor, elapsedTime / fadeInDuration);
+            yield return null;
+        }
+        yield return new WaitForSeconds(displayDuration + (fadeInDuration-elapsedTime));
+
+        elapsedTime = 0f;
+        while (elapsedTime < fadeAwayDuration) {
+            elapsedTime += Time.deltaTime;
+            hintText.color = Color.Lerp(displayColor, hidenColor, elapsedTime / fadeAwayDuration);
+            yield return null;
+        }
+        isAnimating = false;
+    }
+    IEnumerator InteruptedFadeInNoClueText() {
+        Color color = hintText.color;
+        hintText.color = new Color(color.r, color.g, color.b, 1);
+        Color hidenColor = new Color(color.r, color.g, color.b, 0);
+        Color displayColor = new Color(color.r, color.g, color.b, 1);
+
+        
+        yield return new WaitForSeconds(displayDuration);
+
+        float elapsedTime = 0f;
+        while (elapsedTime < fadeAwayDuration) {
+            elapsedTime += Time.deltaTime;
+            hintText.color = Color.Lerp(displayColor, hidenColor, elapsedTime / fadeAwayDuration);
+            yield return null;
+        }
+        isAnimating = false;
     }
 
     public struct Tile
@@ -565,27 +667,5 @@ public class MapGenerator : MonoBehaviour
         public int state;
         public GameObject flagGO;
         public bool isPressed;
-    }
-
-    public class Arr
-    {
-        public Arr(int w, int h) {
-            this.w = w;
-            this.h = h;
-        }
-        public Arr(Arr arr) {
-            w = arr.w;
-            h = arr.h;
-        }
-        public static bool Contain(List<Arr> list, Arr arr) {
-            for (int i = 0; i < list.Count; i++) {
-                if (list[i].w.Equals(arr.w) && list[i].h.Equals(arr.h))
-                    return true;
-            }
-            return false;
-        }
-
-        public int w;
-        public int h;
     }
 }

@@ -1303,7 +1303,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   width: 18
   height: 14
-  amountOfMines: 10
+  amountOfMines: 40
   tile: {fileID: 3065085367576300239, guid: f6d564b1bef8aea4ca1854af1ddb8524, type: 3}
   color1: {r: 0.3551086, g: 0.7169812, b: 0.43634525, a: 1}
   color2: {r: 0.35230508, g: 0.8207547, b: 0.45818758, a: 1}

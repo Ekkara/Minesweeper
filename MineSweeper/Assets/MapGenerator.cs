@@ -1,7 +1,7 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using System.Collections;
 
 public class MapGenerator : MonoBehaviour
 {
@@ -90,16 +90,16 @@ public class MapGenerator : MonoBehaviour
         List<Vector2Int> remainingPos = new List<Vector2Int>();
         remainingPos.Add(new Vector2Int(wp, hp));
         while (remainingPos.Count > 0) {
-            if (mineField[remainingPos[0].x, remainingPos[0].y].isPressed) {
+            if (mineField[remainingPos[0].x, remainingPos[0].y].isPressed) {// as dublet of the same position can be stored this skips them to make it load faster
                 remainingPos.RemoveAt(0);
                 continue;
             }
-
-
+            // for every squere change color and marje them as pressed
             mineField[remainingPos[0].x, remainingPos[0].y].tileGO.GetComponent<SpriteRenderer>().color = (((remainingPos[0].x + remainingPos[0].y) % 2) == 0) ? BGColor1 : BGColor2;
             mineField[remainingPos[0].x, remainingPos[0].y].isPressed = true;
             GenerateNumber(remainingPos[0].x, remainingPos[0].y);
 
+            //add all adjacent tiles to the queue to be progressed 
             if (mineField[remainingPos[0].x, remainingPos[0].y].colidingMineAmount <= 0) {
                 if (remainingPos[0].x >= 1) {
                     if (!mineField[remainingPos[0].x - 1, remainingPos[0].y].isPressed) {
@@ -150,7 +150,7 @@ public class MapGenerator : MonoBehaviour
         }
     }
     void LookForWinState() {
-        if (currentFound >= minSafeFound && 
+        if (currentFound >= minSafeFound &&
             flagesPlaced >= amountOfMines) {
             DisplayAllMines();
             gameOver = true;
@@ -198,14 +198,7 @@ public class MapGenerator : MonoBehaviour
             return;
         }
         mineField[wPos, hPos].state++;
-        if (mineField[wPos, hPos].state >= 3) {
-            mineField[wPos, hPos].state = 0;
-            flagesPlaced--;
-        }
-        if (mineField[wPos, hPos].state.Equals(0)) {
-            Destroy(mineField[wPos, hPos].flagGO);
-        }
-        else if (mineField[wPos, hPos].state.Equals(1)) {
+        if (mineField[wPos, hPos].state.Equals(1)) {//add one blue flag
             GameObject newFlag = Instantiate(flag);
             newFlag.transform.localPosition = new Vector3(wPos, hPos);
             newFlag.transform.SetParent(mineField[wPos, hPos].tileGO.transform);
@@ -214,15 +207,15 @@ public class MapGenerator : MonoBehaviour
             mineField[wPos, hPos].flagGO = newFlag;
 
             flagesPlaced++;
-            LookForWinState();
+            LookForWinState();// look if all mines are marked and no otther tiles exsist, if so the game is won
         }
-        else if (mineField[wPos, hPos].state.Equals(2)) {
+        else if (mineField[wPos, hPos].state.Equals(2)) {//change flags color to orange
+            mineField[wPos, hPos].flagGO.GetComponent<SpriteRenderer>().color = flagColor2;
+        }
+        else if (mineField[wPos, hPos].state >= 3) {//value to large, change back to zero and remove any flag
+            mineField[wPos, hPos].state = 0;
+            flagesPlaced--;
             Destroy(mineField[wPos, hPos].flagGO);
-            GameObject newFlag = Instantiate(flag);
-            newFlag.transform.position = new Vector3(wPos, hPos);
-            newFlag.transform.SetParent(mineField[wPos, hPos].tileGO.transform);
-            newFlag.gameObject.GetComponent<SpriteRenderer>().color = flagColor2;
-            mineField[wPos, hPos].flagGO = newFlag;
         }
     }
 
@@ -325,13 +318,14 @@ public class MapGenerator : MonoBehaviour
         }
     }
 
+    //called on gameover, display where all mines is
     void DisplayAllMines() {
-        for(int w = 0; w < width; w++) {
-            for(int h = 0; h < height; h++) {
+        for (int w = 0; w < width; w++) {
+            for (int h = 0; h < height; h++) {
                 if (mineField[w, h].containMine) {
-                    GameObject newMine = Instantiate(mineGO, 
-                        mineField[w, h].tileGO.transform.position, 
-                        mineField[w, h].tileGO.transform.rotation, 
+                    GameObject newMine = Instantiate(mineGO,
+                        mineField[w, h].tileGO.transform.position,
+                        mineField[w, h].tileGO.transform.rotation,
                         mineField[w, h].tileGO.transform);
                 }
             }
@@ -345,7 +339,7 @@ public class MapGenerator : MonoBehaviour
     private void Update() {
         if (isPaused || gameOver)
             return;
-
+        //update game text to match latest varible's values
         string tempString = baseGameText;
         currentTime += Time.deltaTime;
         tempString = tempString.Replace("[$t]", (currentTime / 60).ToString("00") + ":" + (currentTime % 60).ToString("00"));
@@ -353,7 +347,7 @@ public class MapGenerator : MonoBehaviour
         tempString = tempString.Replace("[$fP]", flagesPlaced.ToString());
         tempString = tempString.Replace("[$tM]", amountOfMines.ToString());
         gameText.text = tempString;
-        
+
         if (Input.GetMouseButtonDown(0)) {
             LayerMask mask = LayerMask.GetMask("Tile");
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -379,15 +373,27 @@ public class MapGenerator : MonoBehaviour
         }
     }
 
-    
+
     Vector2Int currentHint;
+    bool haveHint;
     public void GenerateClue() {
         List<Vector2Int> possibleHints = new List<Vector2Int>();//list of possible squares
         List<Vector2Int> hidenFlags = new List<Vector2Int>();//list of safe tiles that the player might not know of
-
         //if it is not empty calculate all possible tiles
-        #region easy check
-
+        #region naive check
+        /*
+         * this check will only track the obviously missed as to find all guaranteed bombs and safe tiles
+         * doing this will result in some "misses" where no result is given, there are more advanced rules to be implemented
+         * to find these but nothing that is implemented here. 
+         * Also: this func can generate wrong answers if and only if the player places a flag on a safe tile, as the computer 
+         * uses these tiles in it's calculation. The algorithm could be changed to find safe tiles and ignore the playuers input but
+         * where is the sport in that?
+         * 
+         * also yes, for a real game i could simply implement that the ai gives a random right answer since the computer already 
+         * store the right answers, but to help the player find relevant information it was implemented like a algorithm to play
+         * the game.
+         * 
+         */
         for (int w = 0; w < width; w++) {
             for (int h = 0; h < height; h++) {
                 if (!mineField[w, h].isPressed)
@@ -560,15 +566,16 @@ public class MapGenerator : MonoBehaviour
                 }
             }
         }
-        #endregion
         foreach (Vector2Int ar in hidenFlags) {
             mineField[ar.x, ar.y].state = 0;
         }
+        #endregion
+
         //if list is not empty pick a random number and return
         if (possibleHints.Count > 0) {
             PickRandomClue(possibleHints);
         }
-        else {
+        else {//if not display that no clear answers can be given
             if (isAnimating) {
                 StopAllCoroutines();
                 StartCoroutine(InteruptedFadeInNoClueText());
@@ -578,7 +585,6 @@ public class MapGenerator : MonoBehaviour
             }
         }
     }
-    bool haveHint;
     void PickRandomClue(List<Vector2Int> possibleHints) {
         int randomIndex = Random.RandomRange(0, possibleHints.Count - 1);
         if (!haveHint) {
@@ -603,6 +609,10 @@ public class MapGenerator : MonoBehaviour
     }
     public void Restart() {
         GenerateTiles();
+        //restore values to default values so when a new minefield is generated.
+        //this will be done the next frame too in the update. But it looks nicer like
+        //this if the game is paused. 
+
         string tempString = baseGameText;
         currentTime += Time.deltaTime;
         tempString = tempString.Replace("[$t]", (currentTime / 60).ToString("00") + ":" + (currentTime % 60).ToString("00"));
@@ -612,7 +622,7 @@ public class MapGenerator : MonoBehaviour
         gameText.text = tempString;
     }
     public void ExitGame() {
-        Application.Quit();
+        Application.Quit(); //qui the game
     }
 
     [SerializeField] Text hintText;
@@ -626,13 +636,15 @@ public class MapGenerator : MonoBehaviour
         Color displayColor = new Color(color.r, color.g, color.b, 1);
 
         float elapsedTime = 0f;
-        while (elapsedTime < fadeInDuration) {
+        while (elapsedTime < fadeInDuration) {//slowly fade in the text
             elapsedTime += Time.deltaTime;
             hintText.color = Color.Lerp(hidenColor, displayColor, elapsedTime / fadeInDuration);
             yield return null;
         }
-        yield return new WaitForSeconds(displayDuration + (fadeInDuration-elapsedTime));
+        //keep it as it is for x minutes
+        yield return new WaitForSeconds(displayDuration + (fadeInDuration - elapsedTime));
 
+        //slowly fade out again
         elapsedTime = 0f;
         while (elapsedTime < fadeAwayDuration) {
             elapsedTime += Time.deltaTime;
@@ -641,13 +653,15 @@ public class MapGenerator : MonoBehaviour
         }
         isAnimating = false;
     }
+    //if last (or this) is interrupted, another animation plays instead this
+    //animation skip immidatly to a alpha 1 and after a while  fades away
     IEnumerator InteruptedFadeInNoClueText() {
         Color color = hintText.color;
         hintText.color = new Color(color.r, color.g, color.b, 1);
         Color hidenColor = new Color(color.r, color.g, color.b, 0);
         Color displayColor = new Color(color.r, color.g, color.b, 1);
 
-        
+
         yield return new WaitForSeconds(displayDuration);
 
         float elapsedTime = 0f;
@@ -664,7 +678,13 @@ public class MapGenerator : MonoBehaviour
         public bool containMine;
         public int colidingMineAmount;
         public GameObject tileGO;
-        public int state;
+        public int state; //ranging from 0-3 
+        /*
+         * 0: not marked with anything
+         * 1: blue flag
+         * 2: orange flag
+         * 3: hidden flag, a emporary flag the computer uses for hints inicating it found out it is safe but it is not marked by the player
+         */
         public GameObject flagGO;
         public bool isPressed;
     }
